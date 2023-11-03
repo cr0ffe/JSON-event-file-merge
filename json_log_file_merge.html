@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+Author: Chris Roffe
+Allows user to combine multiple JSON event log files from SentryWire into one file,
+to make manually uploading event log files from searches into 3rd part security tools 
+such as Splunk or Elasticsearch.
+-->
+
+<head>
+    <meta charset="UTF-8">
+    <title>JSON File Merger</title>
+    <style>
+        #drop_zone {
+            width: 300px;
+            height: 200px;
+            padding: 10px;
+            border: 3px dashed #0087F7;
+            margin: 10px;
+            text-align: center;
+            line-height: 200px;
+        }
+
+        #drop_zone.hover {
+            background-color: #EEE;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>JSON File Merger</h2>
+    <div id="drop_zone">Drop files here</div>
+    <progress id="progressBar" value="0" max="100" style="width:100%;"></progress>
+    <div id="status"></div>
+    <a id="downloadLink" style="display:none;">Download Merged File</a>
+
+    <script>
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('drop_zone');
+            dropZone.addEventListener('dragover', handleDragOver, false);
+            dropZone.addEventListener('drop', handleFileSelect, false);
+            dropZone.addEventListener('dragenter', () => dropZone.classList.add('hover'), false);
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'), false);
+        }
+
+        function handleDragOver(evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+            evt.dataTransfer.dropEffect = 'copy';
+        }
+
+        function handleFileSelect(evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+
+            const files = evt.dataTransfer.files;
+            mergeFiles(files);
+        }
+
+        function mergeFiles(files) {
+            let mergedJsonArray = [];
+            let filesProcessed = 0;
+            const progressBar = document.getElementById('progressBar');
+            const status = document.getElementById('status');
+            const downloadLink = document.getElementById('downloadLink');
+
+            progressBar.value = 0;
+            progressBar.max = files.length;
+            status.textContent = '';
+            downloadLink.style.display = 'none';
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    const text = e.target.result;
+                    const jsonLines = text.split('\n').filter(line => line.trim() !== '');
+
+                    jsonLines.forEach(line => {
+                        try {
+                            const jsonObject = JSON.parse(line);
+                            mergedJsonArray.push(jsonObject);
+                        } catch (error) {
+                            console.error("Error when trying to parse json from file " + file.name + ": ", error);
+                        }
+                    });
+
+                    filesProcessed++;
+                    progressBar.value = filesProcessed;
+
+                    if (filesProcessed === files.length) {
+                        const mergedContent = JSON.stringify(mergedJsonArray, null, 2);
+                        const blob = new Blob([mergedContent], { type: "text/json" });
+                        const url = URL.createObjectURL(blob);
+
+                        downloadLink.href = url;
+                        downloadLink.download = 'merged_file.json';
+                        downloadLink.textContent = 'Download Merged File';
+                        downloadLink.style.display = 'block';
+                        status.textContent = 'Merge complete! Your file is ready for download.';
+                    }
+                };
+
+                reader.readAsText(file);
+            });
+        }
+
+        setupDragAndDrop();
+    </script>
+</body>
+
+</html>
